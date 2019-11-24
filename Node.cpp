@@ -295,7 +295,7 @@ class Node
  	nodeInfo find_successor(ll targetnode_id) //target node id is the joining node id
 	{
 //nodeInfo successor and predecessor are stored at each node
-	if(targetnode_id > currentNode.id && targetnode_id <= successor.id)//value lies in proper range
+	if(targetnode_id > currentNode.id && targetnode_id <= successor.id || successor.id<currentNode.id && (targetnode_id<successor.id || targetnode_id>currentNode.id))//value lies in proper range
 	{
 		return successor;
 	}
@@ -307,25 +307,7 @@ class Node
 
 	else if(successor.id==predecessor.id)//only 2 elements case
 	{
-		if(successor.id>=targetnode_id)
-		{
-			if(targetnode_id > successor.id || targetnode_id < currentNode.id)
-			{
-				return currentNode;
-			}
-		}
-		else
-		{
-			if((targetnode_id > currentNode.id && targetnode_id > successor.id) || (targetnode_id < currentNode.id && targetnode_id < successor.id))
-				{
-					return successor;
-				}
-				else
-				{
-					return currentNode;
-				}
-		}
-		
+		return currentNode;
 	}
 	else
 	{
