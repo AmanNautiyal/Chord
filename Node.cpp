@@ -30,8 +30,8 @@ class Node
 		cout<<"Port number "<<port<<" assigned"<<endl;
 		currentNode.ip=inet_ntoa(address.sin_addr);
 		currentNode.port=port;
-		fingerTable=vector<nodeInfo>(max_bit+1);
-		successorList=vector<nodeInfo>(lst_sz+1);
+		fingerTable=vector<nodeInfo>(max_bit);
+		successorList=vector<nodeInfo>(lst_sz);
 		inRing=false;
 	}
 	void createRing()
@@ -52,7 +52,7 @@ class Node
 		successor.id=currentNode.id;
 
 		//Successor List??
-		for(int i=0;i<=lst_sz;i++)
+		for(int i=0;i<lst_sz;i++)
 		{
 			successorList[i].ip=ip;
 			successorList[i].port=currentNode.port;
@@ -67,7 +67,7 @@ class Node
 
 
 		//Setting finger table, all reference to own
-		for(int i=0;i<=max_bit;i++)
+		for(int i=0;i<max_bit;i++)
 		{
 			fingerTable[i].ip=ip;
 			fingerTable[i].port=currentNode.port;
@@ -135,9 +135,9 @@ class Node
 			successor.ip=splitip[0];
 			successor.port=atoi(splitip[1].c_str());
 			successor.id=getHashId(ids);
-			fingerTable[0].ip=successor.ip;
-			fingerTable[0].port=successor.port;
-			fingerTable[0].id=successor.id;
+			// fingerTable[0].ip=successor.ip;
+			// fingerTable[0].port=successor.port;
+			// fingerTable[0].id=successor.id;
 		}
 		else if(message.substr(0,7)=="changep")
 		{
@@ -163,7 +163,7 @@ class Node
 		cout<<"Port "<<predecessor.port<<endl;
 		cout<<"Id "<<predecessor.id<<endl;
 		cout<<"Finger table:"<<endl;
-		for(int i=0;i<=max_bit;i++)
+		for(int i=0;i<max_bit;i++)
 		{
 			cout<<fingerTable[i].ip<<"\t"<<fingerTable[i].port<<"\t"<<fingerTable[i].id<<endl;
 		}
@@ -212,7 +212,7 @@ class Node
 	        perror("error");
 	        exit(-1);
 	    }
-	   // cout<<"Received "<<ip_and_port<<endl;
+	   cout<<"Received "<<ip_and_port<<endl;
 	    ip_and_port[length] = '\0';
 	    close(new_sock);
 	   	string ipPort=ip_and_port;
@@ -221,7 +221,7 @@ class Node
 	    successor.port=atoi(splitip[1].c_str());
 	    successor.id=getHashId(ipPort);
 	    //initialise finger table as all entries pointing to immediate successor
-	   	for(int i=0;i<=max_bit;i++)
+	   	for(int i=0;i<max_bit;i++)
 		{
 			fingerTable[i].ip=successor.ip;
 			fingerTable[i].port=successor.port;
@@ -339,7 +339,7 @@ class Node
 	}
 	else
 	{
-		nodeInfo preceding_node=successor;//O(n) lookup
+		nodeInfo preceding_node=closest_preceding_node(targetnode_id);//O(log n) lookup
 		if(targetnode_id==currentNode.id)
 		{
 			return successor;
@@ -350,8 +350,7 @@ class Node
 		    socklen_t len = sizeof(server_addr);
 		    if(preceding_node.ip=="") // couldn't find preceding node
 		    	preceding_node=successor;
-		    int sock =establish_connection(server_addr,preceding_node);
-
+		    int sock=sock=establish_connection(server_addr,preceding_node);
 		    char node_id[46];
 		    strcpy(node_id,("finds:"+to_string(targetnode_id)).c_str());
 		    sendto(sock,node_id, strlen(node_id), 0, (struct sockaddr*)&server_addr, len);
@@ -360,7 +359,7 @@ class Node
 		    char recvipport[41];
 
 			int recvdbytes = recvfrom(sock, recvipport, 1024, 0, (struct sockaddr *) &server_addr, &len);
-
+			close(sock);
 			recvipport[recvdbytes]='\0';
 			nodeInfo temp;
 			if(recvdbytes<0)
@@ -385,15 +384,15 @@ class Node
 	void setFingerTable()
 	{
 
-		int next = 1;
+		int next = 0;
 		long long int mod = pow(2, max_bit);
 
-		while (next <= max_bit)
+		while (next < max_bit)
 		{
 			//		if (help.isNodeAlive(successor.first.first, successor.first.second) == false)
 			//			return;
 
-			long long int newId = currentNode.id + pow(2, next - 1);
+			long long int newId = currentNode.id + pow(2, next );
 			newId = newId % mod;
 			nodeInfo node = find_successor(newId);
 			if (node.ip == "" || node.id == -1 || node.port == -1)
@@ -466,6 +465,31 @@ void put(string key, string value)
 
         cout << "key entered successfully\n";
     }
+}
+nodeInfo closest_preceding_node(ll nodeId)
+{
+	ll greatest_smaller,gsi,greatest,gi;
+	greatest_smaller=-1;
+	gsi=-1;
+	greatest=successor.id;
+	gi=0;
+	for(int i=0;i<max_bit;i++)
+	{
+		if(fingerTable[i].id<nodeId && fingerTable[i].id>greatest_smaller && fingerTable[i].id!=currentNode.id)
+		{
+			greatest_smaller=fingerTable[i].id;
+			gsi=i;
+		}
+		if(fingerTable[i].id>greatest )
+		{
+			greatest=fingerTable[i].id;
+			gi=i;
+		}
+	}
+	if(gsi!=-1)
+		return fingerTable[gsi];
+	else
+		return fingerTable[gi];
 }
 
 };

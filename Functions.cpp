@@ -47,6 +47,7 @@ int establish_connection(struct sockaddr_in &server_addr,nodeInfo node)
     int socket_num=socket(AF_INET,SOCK_DGRAM,0);
     if(socket_num<0)
     {
+    	cerr<<node.ip<<"\t"<<node.port<<endl;
         cerr<<"Error creating socket! \n";
         exit(-1);
     }
