@@ -3,7 +3,8 @@ class Node
 {
 	public:
 	int sockid;
-	vector<nodeInfo> fingerTable,successorList;
+	vector<nodeInfo> successorList;
+	vector<nodeInfo> fingerTable;
 	bool inRing;
 	map<ll,string> keyStore;
 	nodeInfo currentNode;
@@ -15,6 +16,7 @@ class Node
 		int port=rand()%65536;//between 0 to 65535
 		if(port<1024)
 			port+=1024;	//0-1023 are system ports
+			
 		socklen_t len=sizeof(address);
 		address.sin_family=AF_INET;
 		address.sin_port=htons(port);
@@ -61,7 +63,7 @@ class Node
 		predecessor.ip=currentNode.ip;
 		predecessor.port=currentNode.port;
 		predecessor.id=currentNode.id;
-		https://stackoverflow.com/questions/14575068/close-function-not-bei               
+		//https://stackoverflow.com/questions/14575068/close-function-not-bei               
 
 
 		//Setting finger table, all reference to own
@@ -74,8 +76,9 @@ class Node
 		//Start listening to other nodes
 		thread listener(&Node::startListening,this);
 		listener.detach();
-		//stabilize
-
+		//stabilize, updates finger table periodically
+		thread stabiliser(&Node::stabilise,this);
+		stabiliser.detach();
 		//Node is now in the ring
 		inRing=true;
 	}
@@ -94,18 +97,18 @@ class Node
 			thread exec_thread(&Node::exec_comm,this,client,received);
 			exec_thread.detach();
 		}
-	}
-
-
+	}	
 	void exec_comm(struct sockaddr_in client,string message) 
 	{ 
-		cout<<"Received:"<<message<<endl;
+		//cout<<"Received:"<<message<<endl;
        if(message.substr(0,3)=="put")
 		{
 			string keyval=message.substr(4);
 			ll key=stoll(keyval.substr(0,keyval.find(':')));
 			string value=keyval.substr(keyval.find(':')+1);
 			keyStore[key]=value;
+			cout<<"this is value put"<<endl;
+			cout<<keyStore[key]<<endl;
 		}
 		else if(message.substr(0,5)=="finds")
 		{
@@ -114,7 +117,7 @@ class Node
 			socklen_t client_size=sizeof(client);
 			char ipPort[40];
 			strcpy(ipPort,(suc.ip+":"+to_string(suc.port)).c_str());
-			cout<<"Sending: "<<ipPort<<endl;
+			//cout<<"Sending: "<<ipPort<<endl;
 			sendto(sockid,ipPort,strlen(ipPort),0,(struct sockaddr*) &client,client_size);
 		}
 		else if(message.substr(0,5)=="findp")
@@ -122,7 +125,7 @@ class Node
 			socklen_t client_size=sizeof(client);
 			char ipPort[40];
 			strcpy(ipPort,(predecessor.ip+":"+to_string(predecessor.port)).c_str());
-			cout<<"Sending: "<<ipPort<<endl;
+			//cout<<"Sending: "<<ipPort<<endl;
 			sendto(sockid,ipPort,strlen(ipPort),0,(struct sockaddr*) &client,client_size);
 		}
 		else if(message.substr(0,7)=="changes")
@@ -132,6 +135,9 @@ class Node
 			successor.ip=splitip[0];
 			successor.port=atoi(splitip[1].c_str());
 			successor.id=getHashId(ids);
+			fingerTable[0].ip=successor.ip;
+			fingerTable[0].port=successor.port;
+			fingerTable[0].id=successor.id;
 		}
 		else if(message.substr(0,7)=="changep")
 		{
@@ -156,6 +162,11 @@ class Node
 		cout<<"IP "<<predecessor.ip<<endl;
 		cout<<"Port "<<predecessor.port<<endl;
 		cout<<"Id "<<predecessor.id<<endl;
+		cout<<"Finger table:"<<endl;
+		for(int i=0;i<=max_bit;i++)
+		{
+			cout<<fingerTable[i].ip<<"\t"<<fingerTable[i].port<<"\t"<<fingerTable[i].id<<endl;
+		}
 		cout<<"Key value pairs::"<<endl;
 		for (map<ll,string>:: iterator it = keyStore.begin(); it != keyStore.end(); it++)
         	cout<<it->first<<"\t"<<it->second<<endl; 
@@ -187,7 +198,7 @@ class Node
 	    char find_query[46];
 
 	    strcpy(find_query,("finds:"+to_string(node_id)).c_str());
-	    cout<<"Sending "<<find_query<<endl;
+	    //cout<<"Sending "<<find_query<<endl;
 	    if (sendto(new_sock, find_query, strlen(find_query), 0, (struct sockaddr*) &server, len) == -1)
 	    {
 	        perror("error");
@@ -201,7 +212,7 @@ class Node
 	        perror("error");
 	        exit(-1);
 	    }
-	    cout<<"Received "<<ip_and_port<<endl;
+	   // cout<<"Received "<<ip_and_port<<endl;
 	    ip_and_port[length] = '\0';
 	    close(new_sock);
 	   	string ipPort=ip_and_port;
@@ -209,6 +220,13 @@ class Node
 	    successor.ip=splitip[0];
 	    successor.port=atoi(splitip[1].c_str());
 	    successor.id=getHashId(ipPort);
+	    //initialise finger table as all entries pointing to immediate successor
+	   	for(int i=0;i<=max_bit;i++)
+		{
+			fingerTable[i].ip=successor.ip;
+			fingerTable[i].port=successor.port;
+			fingerTable[i].id=successor.id;
+		}
 	   	//ask for predecessor of this node
 	    nodeInfo node=ask_predecessor(successor);
 	   	// ask this node to change its predecessor
@@ -219,11 +237,21 @@ class Node
 	   	//ask this node's old predecessor to change its successor
 	    ask_change_successor(node,currentNode);
 	    inRing=true;
+	    // stabilise, updates finger table periodically
+	    thread stabiliser(&Node::stabilise,this);
+		stabiliser.detach();
 	    thread listener(&Node::startListening,this);
 	    listener.detach();
  	}
 
-
+ 	void stabilise()
+ 	{
+ 		while(1)
+ 		{
+ 			std::this_thread::sleep_for(std::chrono::seconds(1));
+ 			setFingerTable();
+ 		}
+ 	}
  	nodeInfo ask_predecessor(nodeInfo node)
  	{
  		struct sockaddr_in server;
@@ -231,7 +259,7 @@ class Node
 	    int new_sock = establish_connection(server,node);
 	    char change_query[6];
 	    strcpy(change_query,string("findp").c_str());
-	    cout<<"Sending: "<<change_query<<endl;
+	    //cout<<"Sending: "<<change_query<<endl;
 	    if (sendto(new_sock, change_query, strlen(change_query), 0, (struct sockaddr*) &server, len) == -1)
 	    {
 	        perror("error");
@@ -245,7 +273,7 @@ class Node
 	        exit(-1);
 	    }
 	    ip_and_port[length] = '\0';
-	    cout<<"Received: "<<ip_and_port<<endl;
+	    //cout<<"Received: "<<ip_and_port<<endl;
 	    close(new_sock);
 	    string ipPort=ip_and_port;
 	    vector<string> splitip=split_ip(ipPort);
@@ -264,7 +292,7 @@ class Node
 	    int new_sock = establish_connection(server,destNode);
 	    char change_query[49];
 	    strcpy(change_query,string("changep:"+targetNode.ip+":"+to_string(targetNode.port)).c_str());
-	    cout<<"Sending: "<<change_query<<endl;
+	   // cout<<"Sending: "<<change_query<<endl;
 	    if (sendto(new_sock, change_query, strlen(change_query), 0, (struct sockaddr*) &server, len) == -1)
 	    {
 	        perror("error");
@@ -280,7 +308,7 @@ class Node
 	    socklen_t len = sizeof(server);
 	    int new_sock = establish_connection(server,destNode);
 	    char change_query[40];
-	    cout<<"Sending: "<<change_query<<endl;
+	    //cout<<"Sending: "<<change_query<<endl;
 	    strcpy(change_query,string("changes:"+targetNode.ip+":"+to_string(targetNode.port)).c_str());
 	    if (sendto(new_sock, change_query, strlen(change_query), 0, (struct sockaddr*) &server, len) == -1)
 	    {
@@ -291,7 +319,7 @@ class Node
 	    close(new_sock);
  	}
 
-
+    
  	nodeInfo find_successor(ll targetnode_id) //target node id is the joining node id
 	{
 //nodeInfo successor and predecessor are stored at each node
@@ -354,6 +382,92 @@ class Node
 
 	}
 	}
+	void setFingerTable()
+	{
+
+		int next = 1;
+		long long int mod = pow(2, max_bit);
+
+		while (next <= max_bit)
+		{
+			//		if (help.isNodeAlive(successor.first.first, successor.first.second) == false)
+			//			return;
+
+			long long int newId = currentNode.id + pow(2, next - 1);
+			newId = newId % mod;
+			nodeInfo node = find_successor(newId);
+			if (node.ip == "" || node.id == -1 || node.port == -1)
+				break;
+			fingerTable[next] = node;
+			//fingerTable.push_back(node);
+			next++;
+		}
+	}
+void put(string key, string value)
+	{
+    	if (key == "" || value == "")
+    	{
+       		 cout << "Key or value field empty\n";
+        	return;
+    	}
+
+    	else
+    	{
+
+        ll keyHash = getHashId(key);
+        cout << "Key is " << key << " and hash : " << keyHash << endl;
+
+        
+        nodeInfo node2 = find_successor(keyHash);
+
+       
+
+        string ip = node2.ip;
+        int port = node2.port;
+
+        struct sockaddr_in connect_server;
+        socklen_t l = sizeof(connect_server);
+
+        connect_server.sin_family = AF_INET;
+        connect_server.sin_addr.s_addr = inet_addr(ip.c_str());
+        connect_server.sin_port = htons(port);
+
+
+        int sock = socket(AF_INET, SOCK_DGRAM, 0);
+
+        if (sock < 0)
+        {
+            perror("error");
+            exit(-1);
+        }
+
+        
+
+        string ipAndPort = "put ";
+        int i = 0;
+        string hash_string = to_string(keyHash);
+        for (i = 0; i < hash_string.size(); i++)
+        {
+            ipAndPort += hash_string[i];
+        }
+
+        ipAndPort += ':';
+        for (i = 0; i < value.size(); i++)
+        {
+            ipAndPort += value[i];
+        }
+
+        char key_value_array[100];
+        strcpy(key_value_array, ipAndPort.c_str());
+
+        sendto(sock, key_value_array, strlen(key_value_array), 0, (struct sockaddr *)&connect_server, l);
+
+        close(sock);
+
+        cout << "key entered successfully\n";
+    }
+}
+
 };
 void interface(Node node)
 	{
@@ -362,9 +476,12 @@ void interface(Node node)
 		{
 			cout<<"1.Create ring\n";
 			cout<<"2.Join ring\n";
-			cout<<"3.Display info\n";
-			cout<<"4.Exit\n";
+			cout<<"3.Put\n";
+			cout<<"4.get \n";
+			cout<<"5.Display\n";
+			cout<<"6.Exit\n";
 			cout<<"Enter choice:";
+			
 			cin>>ch;
 			if(ch==1)
 				node.createRing();
@@ -378,9 +495,22 @@ void interface(Node node)
 				cin>>port;
 				node.joinRing(ip,port);
 			}
-			else if(ch==3)
+			// else if(ch==3)
+			// 	node.setFingerTable();
+			// else if(ch==3)
+			// {   string key,value;
+			// 	cout<<"Enter Key: ";
+			//     cin>>key;
+			// 	cout << endl;
+			// 	cout<<"Enter Value: ";
+			// 	cin>>value;
+			// 	cout << endl;
+			// 	node.put(key,value);
+
+			// }
+			else if(ch==5)
 				node.display();
-			else if(ch==4)
+			else if(ch==6)
 				break;
 		}
 	}

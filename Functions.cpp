@@ -2,20 +2,20 @@
 ll getHashId(string key)
 {
 	 unsigned char ukey[key.length()+1];
-	 cout<<"Key:"<<key<<endl;
+	 //cout<<"Key:"<<key<<endl;
 	 for(int i=0;i<key.length();i++)
 	 	ukey[i]=key[i];
 	 ukey[key.length()]='\0';
-	 cout<<"Ukey:"<<ukey<<endl;
+	 //<<"Ukey:"<<ukey<<endl;
 	 unsigned char uhash[41];
 	 char hash_str[41];
 	 SHA1(ukey,sizeof(ukey),uhash);
-	 cout<<"uhash:"<<uhash<<endl;
+	 //cout<<"uhash:"<<uhash<<endl;
 	 for(int i=0;i<max_bit/8;i++)
 	 {
 	 	sprintf(hash_str+i,"%d",uhash[i]);
 	 }
-	 cout<<"Hash string:"<<hash_str<<endl;
+	 //cout<<"Hash string:"<<hash_str<<endl;
 	 ll hashval=stoll(hash_str)%((ll)pow(2,max_bit));
 	 return hashval;
 }
