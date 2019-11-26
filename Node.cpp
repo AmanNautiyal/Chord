@@ -138,7 +138,7 @@ class Node
 				{
 					struct sockaddr_in server_addr;
 					socklen_t len = sizeof(server_addr);
-				    int sock=establish_connection(server_addr,successor);
+				    int sock=establish_connection(server_addr,predecessor);
 				    char keyval[100];
 					strcpy(keyval,("put:"+to_string(i.first)+":"+i.second).c_str());
 					sendto(sock,keyval, strlen(keyval), 0, (struct sockaddr*)&server_addr, len);
