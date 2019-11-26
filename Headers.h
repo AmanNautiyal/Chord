@@ -10,6 +10,7 @@
 #include<bits/stdc++.h>
 #include <openssl/sha.h>
 #include <thread>
+#include<string>
 #define ll long long int
 #define BUF_MAX 4096
 #define max_bit 16
